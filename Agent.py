@@ -9,7 +9,10 @@
 # These methods will be necessary for the project's main method to run.
 
 # Install Pillow and uncomment this line to access image processing.
-#from PIL import Image
+from PIL import Image
+from RavensObject import RavensObject
+from RelationshipDifference import RelationshipDifference
+from ShapeRelationship import ShapeRelationship
 
 class Agent:
     # The default constructor for your Agent. Make sure to execute any
@@ -43,5 +46,89 @@ class Agent:
     #
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
-    def Solve(self,problem):
-        return -1
+    def Solve(self, problem):
+        return 1
+
+    def get_relationship_differences(current_figure, goal_figure):
+        relationship_differences = []
+        current_objects = {}
+        goal_objects = {}
+
+        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+        for raven_object in current_figure.attributes:
+            current_objects[raven_object.name] = Agent.get_relationships(current_figure, raven_object)
+
+        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+        for raven_object in goal_figure.attributes:
+            goal_objects[raven_object.name] = Agent.get_relationships(goal_figure, raven_object)
+
+        for key1 in current_objects:
+            for key2 in goal_objects:
+                if key1 == key2:
+                    for current_relationship in current_objects[key1]:
+                        found = False
+
+                        for goal_relationship in goal_objects[key2]:
+                            if current_relationship == goal_relationship:
+                                found = True
+                            if found is False:
+                                relationship_differences.append(RelationshipDifference(
+                                    current_relationship, goal_relationship
+                                ))
+
+        return relationship_differences
+
+    def generate_figures(self, current_figure, goal_figure):
+        relationship_differences = Agent.get_relationship_differences(current_figure, goal_figure)
+        next_figures = {}
+
+        # Generate a set of possible transformations that may rectify the relationship difference between the
+        # current figure and the goal figure
+        for difference in relationship_differences:
+            new_objects = Agent.apply_all_transformations(difference.old_value.object1)
+
+            for new_object in new_objects:
+                new_figure = current_figure
+                new_figure.objects[difference.old_value.object1.name] = new_object
+                next_figures[new_figure.name] = new_figure
+
+        return next_figures
+
+    def test_figures(self, next_figures, goal_figure):
+        figure_scores = {}
+
+        for key in next_figures:
+            figure_scores[key] = Agent.compare_figures(next_figures[key], goal_figure)
+
+        highest_score = 0
+        best_figure = RavensObject()
+
+        for key in figure_scores:
+            if figure_scores[key] > highest_score:
+                highest_score = figure_scores[key]
+                best_figure = next_figures[key]
+            elif figure_scores[key] == highest_score:
+                # Decide between the two figures based on the preferred order of transformations
+                best_state = Agent.utilize_preferences(next_figures[key], best_figure)
+
+        return best_figure
+
+    def compare_figures(figure, goal_figure):
+        return 1
+
+    def get_relationships(raven_figure, raven_object):
+        relationships = []
+
+        for key in raven_object.attributes:
+            if key == "inside" or key == "above" or key == "left-of" or key == "overlaps":
+                relationship_values = [x.strip() for x in raven_object.attributes[key].split(',')]
+                for value in relationship_values:
+                    relationships.append(ShapeRelationship(raven_object, raven_figure.objects[value], key))
+
+        return relationships
+
+    def apply_all_transformations(raven_object):
+        return ["test1", "test2"]
+
+    def utilize_preferences(figure1, figure2):
+        return figure1
