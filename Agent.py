@@ -10,7 +10,6 @@
 
 # Install Pillow and uncomment this line to access image processing.
 from PIL import Image
-from enum import Enum
 from RavensObject import RavensObject
 from RelationshipDifference import RelationshipDifference
 from ShapeRelationship import ShapeRelationship
@@ -23,7 +22,17 @@ class Agent:
         "small",
         "medium",
         "large",
-        "very large"
+        "very large",
+        "huge"
+    ]
+
+    fills = [
+        "no",
+        "bottom-half",
+        "top-half",
+        "left-half",
+        "right-half",
+        "yes"
     ]
 
     # The default constructor for your Agent. Make sure to execute any
@@ -60,74 +69,89 @@ class Agent:
     def Solve(self, problem):
         return 1
 
-    def get_relationship_differences(current_figure, goal_figure):
-        relationship_differences = []
-        current_objects = {}
-        goal_objects = {}
-
-        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
-        for raven_object in current_figure.attributes:
-            current_objects[raven_object.name] = Agent.get_relationships(current_figure, raven_object)
-
-        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
-        for raven_object in goal_figure.attributes:
-            goal_objects[raven_object.name] = Agent.get_relationships(goal_figure, raven_object)
-
-        for key1 in current_objects:
-            for key2 in goal_objects:
-                if key1 == key2:
-                    for current_relationship in current_objects[key1]:
-                        found = False
-
-                        for goal_relationship in goal_objects[key2]:
-                            if current_relationship == goal_relationship:
-                                found = True
-                            if found is False:
-                                relationship_differences.append(RelationshipDifference(
-                                    current_relationship, goal_relationship
-                                ))
-
-        return relationship_differences
-
     def generate_figures(self, current_figure, goal_figure):
-        relationship_differences = Agent.get_relationship_differences(current_figure, goal_figure)
+        relationship_differences = self.get_relationship_differences(current_figure, goal_figure)
         next_figures = {}
 
         # Generate a set of possible transformations that may rectify the relationship difference between the
         # current figure and the goal figure
         for difference in relationship_differences:
-            new_objects = Agent.apply_all_transformations(difference.old_value.object1)
+            new_objects = self.apply_all_transformations(difference.old_relationship.object1)
 
             for new_object in new_objects:
                 new_figure = current_figure
-                new_figure.objects[difference.old_value.object1.name] = new_object
+                new_figure.objects[difference.old_relationship.object1.name] = new_object
                 next_figures[new_figure.name] = new_figure
 
         return next_figures
 
+    # Get the figure with the least number of differences
     def test_figures(self, next_figures, goal_figure):
         figure_scores = {}
 
-        for key in next_figures:
-            figure_scores[key] = Agent.compare_figures(next_figures[key], goal_figure)
+        for figure_name, figure in next_figures.items():
+            figure_scores[figure_name] = self.compare_figures(figure, goal_figure)
 
-        highest_score = 0
+        lowest_score = float("inf")
         best_figure = RavensObject()
-
-        for key in figure_scores:
-            if figure_scores[key] > highest_score:
-                highest_score = figure_scores[key]
-                best_figure = next_figures[key]
-            elif figure_scores[key] == highest_score:
+        for figure_name, score in figure_scores.items():
+            if score < lowest_score:
+                lowest_score = score
+                best_figure = next_figures[figure_name]
+            elif score == lowest_score:
                 # Decide between the two figures based on the preferred order of transformations
-                best_figure = Agent.utilize_preferences(next_figures[key], best_figure)
+                best_figure = self.utilize_preferences(next_figures[figure_name], best_figure)
 
         return best_figure
 
-    def compare_figures(figure, goal_figure):
-        return 1
+    def get_relationship_differences(self, current_figure, goal_figure):
+        relationship_differences = []
+        current_objects = {}
+        goal_objects = {}
 
-    def get_relationships(raven_figure, raven_object):
+        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+        for object_name, raven_object in current_figure.objects.items():
+            current_objects[object_name] = self.get_relationships(current_figure, raven_object)
+
+        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+        for object_name, raven_object in goal_figure.objects.items():
+            goal_objects[object_name] = self.get_relationships(goal_figure, raven_object)
+
+        for object_name in current_objects:
+            if object_name in goal_objects:
+                for current_relationship in current_objects[object_name]:
+                    for goal_relationship in goal_objects[object_name]:
+                        # Add RelationshipDifference to list only if relationship between shapes has changed between
+                        # the figures
+                        if (current_relationship.object1.name == goal_relationship.object1.name and
+                                current_relationship.object2.name == goal_relationship.object2.name and
+                                current_relationship.value != goal_relationship.value):
+                            relationship_differences.append(RelationshipDifference(
+                                current_relationship, goal_relationship
+                            ))
+
+        return relationship_differences
+
+    # Get the differences of shapes between figures by comparing the attributes of the shape for identical values
+    def compare_figures(self, figure, goal_figure):
+        score = 0
+
+        for object_name, raven_object in figure.objects.items():
+            for goal_object_name, goal_object in goal_figure.objects.items():
+                if object_name == goal_object_name:
+                    # Calculate similarity of shape in both figures using attribute values
+                    for attribute_name, attribute in raven_object.attributes.items():
+                        for goal_attribute_name, goal_attribute in goal_object.attributes.items():
+                            # Increase score if the shape between the figures is different
+                            if attribute_name == goal_attribute_name and attribute != goal_attribute:
+                                score += 1
+
+        return score
+
+    def utilize_preferences(self, figure1, figure2):
+        return figure1
+
+    def get_relationships(self, raven_figure, raven_object):
         relationships = []
 
         for key in raven_object.attributes:
@@ -139,25 +163,77 @@ class Agent:
         return relationships
 
     def apply_all_transformations(self, raven_object):
-        # Expand object to all larger sizes
-        # Contract object to all smaller sizes
-        # Rotate object
+        new_objects = []
 
-        pass
+        # Append current shape state to list for 'unchanged' transformation
+        new_objects.append(raven_object)
 
-    def utilize_preferences(self, figure1, figure2):
-        return figure1
+        # Get all possible sizes of shape
+        new_objects.extend(self.apply_size_transformations(raven_object))
+
+        # Get all possible angles shape
+        if "angle" in raven_object.attributes:
+            new_objects.extend(self.apply_rotate_transformations(raven_object))
+
+        # Fill shape
+        if "fill" in raven_object.attributes:
+            new_objects.extend(self.apply_object_fills(raven_object))
+
+        return new_objects
+
+    def apply_size_transformations(self, raven_object):
+        new_objects = []
+
+        # Keep expanding object to largest size
+        new_object = raven_object
+        while new_object.attributes["size"] != self.sizes[len(self.sizes) - 1]:
+            new_object = self.expand_object(new_object)
+            new_objects.append(new_object)
+
+        # Keep contracting object to smallest size
+        new_object = raven_object
+        while new_object.attributes["size"] != self.sizes[0]:
+            new_object = self.contract_object(new_object)
+            new_objects.append(new_object)
+
+        return new_objects
+
+    def apply_rotate_transformations(self, raven_object):
+        new_objects = []
+
+        # Keep rotating object counter clockwise to 360 degrees
+        new_object = raven_object
+        while new_object.attributes["angle"] < 360:
+            new_object = self.rotate_object_counter_clockwise(raven_object)
+            new_objects.append(new_object)
+
+        # Keep rotating object clockwise to 0 degrees
+        new_object = raven_object
+        while new_object.attributes["angle"] >= 0:
+            new_object = self.rotate_object_clockwise(raven_object)
+            new_objects.append(new_object)
+
+        return new_objects
+
+    def apply_object_fills(self, raven_object):
+        new_objects = []
+
+        # Apply all fills to object
+        for fill in self.fills:
+            new_object = raven_object
+            if new_object.attributes["fill"] != fill:
+                new_object.attributes["fill"] = fill
+                new_objects.append(raven_object)
+
+        return new_objects
 
     def expand_object(self, raven_object):
         new_raven_object = raven_object
 
         # Get current size of shape
         size_value = raven_object.attributes.get("size")
-
-        # Expand shape to next size if possible
-        if size_value != "very large":
-            size_value = self.sizes[self.sizes.index(size_value) + 1]
-
+        # Expand shape to next size
+        size_value = self.sizes[self.sizes.index(size_value) + 1]
         # Assign new size to shape
         new_raven_object.attributes["size"] = size_value
 
@@ -168,15 +244,33 @@ class Agent:
 
         # Get current size of shape
         size_value = raven_object.attributes.get("size")
-
-        # Expand shape to next size if possible
-        if size_value != "very small":
-            size_value = self.sizes[self.sizes.index(size_value) - 1]
-
+        # Contract shape to next size
+        size_value = self.sizes[self.sizes.index(size_value) - 1]
         # Assign new size to shape
         new_raven_object.attributes["size"] = size_value
 
         return new_raven_object
 
-    def rotate_object(self, raven_object):
-        pass
+    def rotate_object_clockwise(self, raven_object):
+        new_object = raven_object
+
+        # Get current angle of shape
+        angle_value = raven_object.attributes.get("angle")
+        # Decrease angle by 15 degrees
+        angle_value -= 15
+        # Assign new angle to shape
+        new_object.attributes["angle"] = angle_value
+
+        return new_object
+
+    def rotate_object_counter_clockwise(self, raven_object):
+        new_object = raven_object
+
+        # Get current angle of shape
+        angle_value = raven_object.attributes.get("angle")
+        # Increase angle by 15 degrees
+        angle_value += 15
+        # Assign new angle to shape
+        new_object.attributes["angle"] = angle_value
+
+        return new_object
