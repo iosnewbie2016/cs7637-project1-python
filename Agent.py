@@ -10,10 +10,21 @@
 
 # Install Pillow and uncomment this line to access image processing.
 from PIL import Image
+from enum import Enum
 from RavensObject import RavensObject
 from RelationshipDifference import RelationshipDifference
 from ShapeRelationship import ShapeRelationship
 
+class Figure(Enum):
+	A = 1
+	B = 2
+	C = 3
+	D = 4
+	E = 5
+	F = 6
+	G = 7
+	H = 8
+	I = 9
 
 class Agent:
 
@@ -67,6 +78,10 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self, problem):
+		self.traverse_row(1, 2)
+		self.traverse_column(1, 2)
+		self.traverse_row(1, 3)
+		self.traverse_column(1, 3)
         return 1
 
     def generate_figures(self, current_figure, goal_figure):
@@ -84,6 +99,25 @@ class Agent:
                 next_figures[new_figure.name] = new_figure
 
         return next_figures
+	
+	# Returns a set of figures
+	# def generate_figures(self, current_figure, goal_figure):
+		# object_differences = self.get_object_differences(current_figure, goal_figure)
+        # next_figures = {}
+
+        # # Generate a set of possible transformations that may rectify the object difference between the
+        # # current figure and the goal figure
+        # for object_name, difference_list in object_differences.items():
+			# for difference in difference_list:
+				
+			
+            # new_object = self.apply_all_transformations(current_figure.objects[object_name])
+
+            # new_figure = current_figure
+            # new_figure.objects[object_name] = new_object
+            # next_figures[new_figure.name] = new_figure
+
+        # return next_figures
 
     # Get the figure with the least number of differences
     def test_figures(self, next_figures, goal_figure):
@@ -131,22 +165,44 @@ class Agent:
                             ))
 
         return relationship_differences
+	
+	# Returns dictionary with object name as key and list of attribute names as
+	# value. The dictionary represents any differences between an object in
+	# two figures, with the differing attribute noted in the list of attribute
+	# names (value) for the object name (key).
+	def get_object_differences(self, figure1, figure2):
+        object_differences = {}
+		
+		for object1_name, raven_object1 in figure1.objects.items():
+			for object2_name, raven_object2 in figure2.objects.items():
+				if object1_name == object2_name:
+					differences = []
+					# Get list of differing attributes for the object in both figures
+					for attribute1_name, attribute1 in raven_object1.attributes.items():
+						for attribute2_name, attribute2 in raven_object2.attributes.items():
+							if attribute1_name == attribute2_name and attribute1 != attribute2:
+								differences.append(attribute1_name)
+					# Insert list in the dictionary if differences exist
+					if differences:
+						object_differences[object1_name] = differences
+		
+        return object_differences
 
-    # Get the differences of shapes between figures by comparing the attributes of the shape for identical values
-    def compare_figures(self, figure, goal_figure):
-        score = 0
+    # Return the number of differences between the shapes in two figures
+    def compare_figures(self, figure1, figure2):
+        differences = 0
 
-        for object_name, raven_object in figure.objects.items():
-            for goal_object_name, goal_object in goal_figure.objects.items():
-                if object_name == goal_object_name:
+        for object1_name, raven_object1 in figure1.objects.items():
+            for object2_name, raven_object2 in figure2.objects.items():
+                if object1_name == object2_name:
                     # Calculate similarity of shape in both figures using attribute values
-                    for attribute_name, attribute in raven_object.attributes.items():
-                        for goal_attribute_name, goal_attribute in goal_object.attributes.items():
-                            # Increase score if the shape between the figures is different
-                            if attribute_name == goal_attribute_name and attribute != goal_attribute:
-                                score += 1
+                    for attribute1_name, attribute1 in raven_object1.attributes.items():
+                        for attribute2_name, attribute2 in raven_object2.attributes.items():
+                            # Add difference if the shape between the figures is different
+                            if attribute1_name == attribute2_name and attribute1 != attribute2:
+                                differences += 1
 
-        return score
+        return differences
 
     def utilize_preferences(self, figure1, figure2):
         return figure1
@@ -274,3 +330,38 @@ class Agent:
         new_object.attributes["angle"] = angle_value
 
         return new_object
+	
+from enum import Enum
+
+class Figure(Enum):
+	A = 1
+	B = 2
+	C = 3
+	D = 4
+	E = 5
+	F = 6
+	G = 7
+	H = 8
+	I = 9
+	
+	# Iterate through row specified by the given row number and print the
+	# shape pairs in the row.
+	def traverse_row(self, index, size):
+		print ("traverse_row")
+		current_cell = index * size - (size - 1)
+		row_end = current_cell + size - 1
+		
+		while current_cell < row_end:
+			print (Figure(current_cell).name + " and " + Figure(current_cell + 1).name)
+			current_cell += 1
+
+	# Iterate through column specified by the given column number and print
+	# the shape pairs in the column.
+	def traverse_column(self, index, size):
+		print ("traverse_column")
+		current_cell = index
+		column_end = index + (size * (size - 1))
+		
+		while current_cell < column_end:
+			print (Figure(current_cell).name + " and " + Figure(current_cell + size).name)
+			current_cell += size
