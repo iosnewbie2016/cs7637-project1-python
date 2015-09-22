@@ -10,11 +10,22 @@
 
 # Install Pillow and uncomment this line to access image processing.
 from PIL import Image
+from enum import Enum
 from RavensObject import RavensObject
 from RelationshipDifference import RelationshipDifference
 from ShapeRelationship import ShapeRelationship
 
+
 class Agent:
+
+    sizes = [
+        "very small",
+        "small",
+        "medium",
+        "large",
+        "very large"
+    ]
+
     # The default constructor for your Agent. Make sure to execute any
     # processing necessary before your Agent starts solving problems here.
     #
@@ -109,7 +120,7 @@ class Agent:
                 best_figure = next_figures[key]
             elif figure_scores[key] == highest_score:
                 # Decide between the two figures based on the preferred order of transformations
-                best_state = Agent.utilize_preferences(next_figures[key], best_figure)
+                best_figure = Agent.utilize_preferences(next_figures[key], best_figure)
 
         return best_figure
 
@@ -127,8 +138,45 @@ class Agent:
 
         return relationships
 
-    def apply_all_transformations(raven_object):
-        return ["test1", "test2"]
+    def apply_all_transformations(self, raven_object):
+        # Expand object to all larger sizes
+        # Contract object to all smaller sizes
+        # Rotate object
 
-    def utilize_preferences(figure1, figure2):
+        pass
+
+    def utilize_preferences(self, figure1, figure2):
         return figure1
+
+    def expand_object(self, raven_object):
+        new_raven_object = raven_object
+
+        # Get current size of shape
+        size_value = raven_object.attributes.get("size")
+
+        # Expand shape to next size if possible
+        if size_value != "very large":
+            size_value = self.sizes[self.sizes.index(size_value) + 1]
+
+        # Assign new size to shape
+        new_raven_object.attributes["size"] = size_value
+
+        return new_raven_object
+
+    def contract_object(self, raven_object):
+        new_raven_object = raven_object
+
+        # Get current size of shape
+        size_value = raven_object.attributes.get("size")
+
+        # Expand shape to next size if possible
+        if size_value != "very small":
+            size_value = self.sizes[self.sizes.index(size_value) - 1]
+
+        # Assign new size to shape
+        new_raven_object.attributes["size"] = size_value
+
+        return new_raven_object
+
+    def rotate_object(self, raven_object):
+        pass
