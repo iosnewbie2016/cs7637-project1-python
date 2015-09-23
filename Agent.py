@@ -161,7 +161,7 @@ class Agent:
         return object_differences
 
     def compare_differences(self, set1, set2):
-        similiarities = 0
+        similarities = 0
 
         for object1_name, object1_differences in set1.items():
             for object2_name, object2_differences in set2.items():
@@ -171,7 +171,7 @@ class Agent:
                             if object1_difference == object2_difference:
                                 similiarities += 1
 
-        return similiarities
+        return similarities
 
     # Get objects in figure 1 and figure 2 that correspond with one another. In
     # other words match up the objects between the figures.
