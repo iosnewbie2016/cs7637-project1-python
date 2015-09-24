@@ -11,19 +11,44 @@
 # Install Pillow and uncomment this line to access image processing.
 from PIL import Image
 from enum import Enum
-from RavensObject import RavensObject
-from RelationshipDifference import RelationshipDifference
-from ShapeRelationship import ShapeRelationship
+
+
+class Figure(Enum):
+    A = 1
+    B = 2
+    C = 3
+    D = 4
+    E = 5
+    F = 6
+    G = 7
+    H = 8
+    I = 9
 
 
 class Agent:
-
     sizes = [
         "very small",
         "small",
         "medium",
         "large",
-        "very large"
+        "very large",
+        "huge"
+    ]
+
+    fills = [
+        "no",
+        "bottom-half",
+        "top-half",
+        "left-half",
+        "right-half",
+        "yes"
+    ]
+
+    relationships = [
+        "inside",
+        "above",
+        "left-of",
+        "overlaps"
     ]
 
     # The default constructor for your Agent. Make sure to execute any
@@ -58,125 +83,397 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self, problem):
-        return 1
+        # Get size of matrix
+        size = 0
+        if problem.problemType == "2x2":
+            size = 2
+        elif problem.problemType == "3x3":
+            size = 3
 
-    def get_relationship_differences(current_figure, goal_figure):
-        relationship_differences = []
-        current_objects = {}
-        goal_objects = {}
+        # Get differences between last two figures in first row
+        row_end = size
+        row_differences = self.get_object_differences(
+            problem.figures[Figure(row_end - 1).name],
+            problem.figures[Figure(row_end).name]
+        )
 
-        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
-        for raven_object in current_figure.attributes:
-            current_objects[raven_object.name] = Agent.get_relationships(current_figure, raven_object)
+        # Get differences between last two figures in first column
+        column_end = 1 + (size * (size - 1))
+        column_differences = self.get_object_differences(
+            problem.figures[Figure(column_end - size).name],
+            problem.figures[Figure(column_end).name]
+        )
 
-        # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
-        for raven_object in goal_figure.attributes:
-            goal_objects[raven_object.name] = Agent.get_relationships(goal_figure, raven_object)
+        # The figure name as key and similarity score of differences as value
+        answer_differences_similarity = {}
+        for x in range(1, 7):
+            score = 0
 
-        for key1 in current_objects:
-            for key2 in goal_objects:
-                if key1 == key2:
-                    for current_relationship in current_objects[key1]:
-                        found = False
+            last_element = size * size
+            # Get differences between last two figures in last row
+            answer_row_differences = self.get_object_differences(
+                problem.figures[Figure(last_element - 1).name],
+                problem.figures[str(x)]
+            )
 
-                        for goal_relationship in goal_objects[key2]:
-                            if current_relationship == goal_relationship:
-                                found = True
-                            if found is False:
-                                relationship_differences.append(RelationshipDifference(
-                                    current_relationship, goal_relationship
-                                ))
+            # Get differences between last two figures in last column
+            answer_column_differences = self.get_object_differences(
+                problem.figures[Figure(last_element - size).name],
+                problem.figures[str(x)]
+            )
 
-        return relationship_differences
+            score += self.compare_differences(row_differences, answer_row_differences)
+            score += self.compare_differences(column_differences, answer_column_differences)
 
-    def generate_figures(self, current_figure, goal_figure):
-        relationship_differences = Agent.get_relationship_differences(current_figure, goal_figure)
-        next_figures = {}
+            answer_differences_similarity[str(x)] = score
 
-        # Generate a set of possible transformations that may rectify the relationship difference between the
-        # current figure and the goal figure
-        for difference in relationship_differences:
-            new_objects = Agent.apply_all_transformations(difference.old_value.object1)
+        # Choose answer with highest number of similarities
+        answer = -1
+        high_score = 0
+        for figure_name, score in answer_differences_similarity.items():
+            if score > high_score:
+                answer = int(figure_name)
 
-            for new_object in new_objects:
-                new_figure = current_figure
-                new_figure.objects[difference.old_value.object1.name] = new_object
-                next_figures[new_figure.name] = new_figure
+        return answer
 
-        return next_figures
+    # Returns dictionary with object name as key and list of attribute names as
+    # value. The dictionary represents any differences between an object in
+    # two figures, with the differing attribute noted in the list of attribute
+    # names (value) for the object name (key).
+    def get_object_differences(self, figure1, figure2):
 
-    def test_figures(self, next_figures, goal_figure):
-        figure_scores = {}
+        object_differences = {}
 
-        for key in next_figures:
-            figure_scores[key] = Agent.compare_figures(next_figures[key], goal_figure)
+        for object1_name, raven_object1 in figure1.objects.items():
+            for object2_name, raven_object2 in figure2.objects.items():
+                if object1_name == object2_name:
+                    # Store names of differing attributes
+                    differences = []
+                    # Get list of differing attributes for the object in both figures
+                    for attribute1_name, attribute1 in raven_object1.attributes.items():
+                        for attribute2_name, attribute2 in raven_object2.attributes.items():
+                            if attribute1_name == attribute2_name and attribute1 != attribute2:
+                                differences.append(attribute1_name)
+                    # Insert list in the dictionary if differences exist
+                    if differences:
+                        object_differences[object1_name] = differences
 
-        highest_score = 0
-        best_figure = RavensObject()
+        return object_differences
 
-        for key in figure_scores:
-            if figure_scores[key] > highest_score:
-                highest_score = figure_scores[key]
-                best_figure = next_figures[key]
-            elif figure_scores[key] == highest_score:
-                # Decide between the two figures based on the preferred order of transformations
-                best_figure = Agent.utilize_preferences(next_figures[key], best_figure)
+    def compare_differences(self, set1, set2):
+        similarities = 0
 
-        return best_figure
+        for object1_name, object1_differences in set1.items():
+            for object2_name, object2_differences in set2.items():
+                if object1_name == object2_name:
+                    for object1_difference in object1_differences:
+                        for object2_difference in object2_differences:
+                            if object1_difference == object2_difference:
+                                similiarities += 1
 
-    def compare_figures(figure, goal_figure):
-        return 1
+        return similarities
 
-    def get_relationships(raven_figure, raven_object):
-        relationships = []
+    # Get objects in figure 1 and figure 2 that correspond with one another. In
+    # other words match up the objects between the figures.
+    def get_object_correspondences(self, figure1, figure2):
+        # figure1.object.name as key and figure2.object.name as value
+        object_correspondences = {}
 
-        for key in raven_object.attributes:
-            if key == "inside" or key == "above" or key == "left-of" or key == "overlaps":
-                relationship_values = [x.strip() for x in raven_object.attributes[key].split(',')]
-                for value in relationship_values:
-                    relationships.append(ShapeRelationship(raven_object, raven_figure.objects[value], key))
+        if len(figure1.objects) == 1 and len(figure2.objects) == 1:
+            # There is a one to one correspondence of objects
+            object_correspondences[list(figure1.objects.keys())[0]] = list(figure2.objects.keys())[0]
+        elif not self.has_repeated_shapes(figure1) and not self.has_repeated_shapes(figure2):
+            for object1_name, raven_object1 in figure1.objects.items():
+                for object2_name, raven_object2 in figure2.objects.items():
+                    if raven_object1.attributes["shape"] == raven_object2.attributes["shape"]:
+                        object_correspondences[object1_name] = object2_name
+        # Match up objects based on highest number of similarities
+        else:
+            # object1.name as key and dictionary of object2.name as key and similarity score as value
+            object_similarity_scores = {}
+            for object1_name, raven_object1 in figure1.objects.items():
+                # object2.name as key and similarity score as value
+                similarity_scores = {}
+                for object2_name, raven_object2 in figure2.objects.items():
+                    similarity_score = 0
+                    for attribute1_name, attribute1 in raven_object1.attributes.items():
+                        for attribute2_name, attribute2 in raven_object2.attributes.items():
+                            if attribute1_name == attribute2_name and attribute1 == attribute2:
+                                similarity_score += 1
+                    similarity_scores[object2_name] = similarity_score
+                object_similarity_scores[object1_name] = similarity_scores
 
-        return relationships
+            for object1_name in figure1.objects:
+                for object2_name in figure2.objects:
+                    # Check if object1 has the highest similarity score with object2
+                    most_similar = True
+                    for object_name, similarity_scores in object_similarity_scores:
+                        if object_name != object1_name:
+                            if (similarity_scores[object2_name] >
+                                    object_similarity_scores[object1_name][object2_name]):
+                                most_similar = False
+                    if most_similar is True and object2_name not in object_correspondences.values():
+                        object_correspondences[object1_name] = object2_name
 
-    def apply_all_transformations(self, raven_object):
-        # Expand object to all larger sizes
-        # Contract object to all smaller sizes
-        # Rotate object
+        return object_correspondences
 
-        pass
+    def has_repeated_shapes(self, raven_figure):
+        repeated_shapes = False
 
-    def utilize_preferences(self, figure1, figure2):
-        return figure1
+        for object1_name, raven_object1 in raven_figure.objects.items():
+            # Check if shape of object is shared by another object in figure
+            for object2_name, raven_object2 in raven_figure.objects.items():
+                if object1_name != object2_name:
+                    if raven_object1.attributes["shape"] == raven_object2.attributes["shape"]:
+                        repeated_shapes = True
 
-    def expand_object(self, raven_object):
-        new_raven_object = raven_object
+        return repeated_shapes
 
-        # Get current size of shape
-        size_value = raven_object.attributes.get("size")
+    # Iterate through row specified by the given row number and print the
+    # shape pairs in the row.
+    def traverse_row(self, index, size):
+        print("traverse_row")
+        current_cell = index * size - (size - 1)
+        row_end = current_cell + size - 1
 
-        # Expand shape to next size if possible
-        if size_value != "very large":
-            size_value = self.sizes[self.sizes.index(size_value) + 1]
+        while current_cell < row_end:
+            print(Figure(current_cell).name + " and " + Figure(current_cell + 1).name)
+            current_cell += 1
 
-        # Assign new size to shape
-        new_raven_object.attributes["size"] = size_value
+    # Iterate through column specified by the given column number and print
+    # the shape pairs in the column.
+    def traverse_column(self, index, size):
+        print("traverse_column")
+        current_cell = index
+        column_end = index + (size * (size - 1))
 
-        return new_raven_object
+        while current_cell < column_end:
+            print(Figure(current_cell).name + " and " + Figure(current_cell + size).name)
+            current_cell += size
 
-    def contract_object(self, raven_object):
-        new_raven_object = raven_object
+    # MEANS END ANALYSIS METHODS #
 
-        # Get current size of shape
-        size_value = raven_object.attributes.get("size")
-
-        # Expand shape to next size if possible
-        if size_value != "very small":
-            size_value = self.sizes[self.sizes.index(size_value) - 1]
-
-        # Assign new size to shape
-        new_raven_object.attributes["size"] = size_value
-
-        return new_raven_object
-
-    def rotate_object(self, raven_object):
-        pass
+    # # Get the figure with the least number of differences
+    # def test_figures(self, next_figures, goal_figure):
+    #     figure_scores = {}
+    #
+    #     for figure_name, figure in next_figures.items():
+    #         figure_scores[figure_name] = self.compare_figures(figure, goal_figure)
+    #
+    #     lowest_score = float("inf")
+    #     best_figure = RavensObject()
+    #     for figure_name, score in figure_scores.items():
+    #         if score < lowest_score:
+    #             lowest_score = score
+    #             best_figure = next_figures[figure_name]
+    #         elif score == lowest_score:
+    #             # Decide between the two figures based on the preferred order of transformations
+    #             best_figure = self.utilize_preferences(next_figures[figure_name], best_figure)
+    #
+    #     return best_figure
+    #
+    # # Return the number of differences between the shapes in two figures
+    # def contrast_figures(self, figure1, figure2):
+    #     differences = 0
+    #
+    #     for object1_name, raven_object1 in figure1.objects.items():
+    #         for object2_name, raven_object2 in figure2.objects.items():
+    #             if object1_name == object2_name:
+    #                 # Calculate similarity of shape in both figures using attribute values
+    #                 for attribute1_name, attribute1 in raven_object1.attributes.items():
+    #                     for attribute2_name, attribute2 in raven_object2.attributes.items():
+    #                         # Add difference if the shape between the figures is different
+    #                         if attribute1_name == attribute2_name and attribute1 != attribute2:
+    #                             differences += 1
+    #
+    #     return differences
+    #
+    # def generate_figures(self, current_figure, goal_figure):
+    #     relationship_differences = self.get_relationship_differences(current_figure, goal_figure)
+    #     next_figures = {}
+    #
+    #     # Generate a set of possible transformations that may rectify the relationship difference between the
+    #     # current figure and the goal figure
+    #     for difference in relationship_differences:
+    #         new_objects = self.apply_all_transformations(difference.old_relationship.object1)
+    #
+    #         for new_object in new_objects:
+    #             new_figure = current_figure
+    #             new_figure.objects[difference.old_relationship.object1.name] = new_object
+    #             next_figures[new_figure.name] = new_figure
+    #
+    #     return next_figures
+    #
+    # # Returns a set of figures
+    # def generate_figures(self, current_figure, goal_figure):
+    #     object_differences = self.get_object_differences(current_figure, goal_figure)
+    #     next_figures = {}
+    #
+    #     # Generate a set of possible transformations that may rectify the object difference between the
+    #     # current figure and the goal figure
+    #     for object_name, difference_list in object_differences.items():
+    #         new_object = self.apply_all_transformations(current_figure.objects[object_name])
+    #         new_figure = current_figure
+    #         new_figure.objects[object_name] = new_object
+    #         next_figures[new_figure.name] = new_figure
+    #
+    #     return next_figures
+    #
+    # def get_relationship_differences(self, current_figure, goal_figure):
+    #     relationship_differences = []
+    #     current_objects = {}
+    #     goal_objects = {}
+    #
+    #     # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+    #     for object_name, raven_object in current_figure.objects.items():
+    #         current_objects[object_name] = self.get_relationships(current_figure, raven_object)
+    #
+    #     # Create dictionary with RavensObject name as key and list of ShapeRelationship as value
+    #     for object_name, raven_object in goal_figure.objects.items():
+    #         goal_objects[object_name] = self.get_relationships(goal_figure, raven_object)
+    #
+    #     for object_name in current_objects:
+    #         if object_name in goal_objects:
+    #             for current_relationship in current_objects[object_name]:
+    #                 for goal_relationship in goal_objects[object_name]:
+    #                     # Add RelationshipDifference to list only if relationship between shapes has changed between
+    #                     # the figures
+    #                     if (current_relationship.object1.name == goal_relationship.object1.name and
+    #                                 current_relationship.object2.name == goal_relationship.object2.name and
+    #                                 current_relationship.value != goal_relationship.value):
+    #                         relationship_differences.append(RelationshipDifference(
+    #                             current_relationship, goal_relationship
+    #                         ))
+    #
+    #     return relationship_differences
+    #
+    # def utilize_preferences(self, figure1, figure2):
+    #     return figure1
+    #
+    # def get_relationships(self, raven_figure, raven_object):
+    #     # List of ObjectRelationship objects
+    #     object_relationships = []
+    #
+    #     for attribute_name, attribute in raven_object.attributes.items():
+    #         if attribute_name in self.relationships:
+    #             # An object can have the same relationship with multiple other objects
+    #             relationship_values = [x.strip() for x in raven_object.attributes[attribute_name].split(',')]
+    #             for value in relationship_values:
+    #                 object_relationships.append(
+    #                     ObjectRelationship(raven_object.name, raven_figure.objects[value], attribute_name
+    #                 ))
+    #
+    #     return object_relationships
+    #
+    # def apply_all_transformations(self, raven_object):
+    #     new_objects = []
+    #
+    #     # Append current shape state to list for 'unchanged' transformation
+    #     new_objects.append(raven_object)
+    #
+    #     # Get all possible sizes of shape
+    #     new_objects.extend(self.apply_size_transformations(raven_object))
+    #
+    #     # Get all possible angles shape
+    #     if "angle" in raven_object.attributes:
+    #         new_objects.extend(self.apply_rotate_transformations(raven_object))
+    #
+    #     # Fill shape
+    #     if "fill" in raven_object.attributes:
+    #         new_objects.extend(self.apply_object_fills(raven_object))
+    #
+    #     return new_objects
+    #
+    # def apply_size_transformations(self, raven_object):
+    #     new_objects = []
+    #
+    #     # Keep expanding object to largest size
+    #     new_object = raven_object
+    #     while new_object.attributes["size"] != self.sizes[len(self.sizes) - 1]:
+    #         new_object = self.expand_object(new_object)
+    #         new_objects.append(new_object)
+    #
+    #     # Keep contracting object to smallest size
+    #     new_object = raven_object
+    #     while new_object.attributes["size"] != self.sizes[0]:
+    #         new_object = self.contract_object(new_object)
+    #         new_objects.append(new_object)
+    #
+    #     return new_objects
+    #
+    # def apply_rotate_transformations(self, raven_object):
+    #     new_objects = []
+    #
+    #     # Keep rotating object counter clockwise to 360 degrees
+    #     new_object = raven_object
+    #     while new_object.attributes["angle"] < 360:
+    #         new_object = self.rotate_object_counter_clockwise(raven_object)
+    #         new_objects.append(new_object)
+    #
+    #     # Keep rotating object clockwise to 0 degrees
+    #     new_object = raven_object
+    #     while new_object.attributes["angle"] >= 0:
+    #         new_object = self.rotate_object_clockwise(raven_object)
+    #         new_objects.append(new_object)
+    #
+    #     return new_objects
+    #
+    # def apply_object_fills(self, raven_object):
+    #     new_objects = []
+    #
+    #     # Apply all fills to object
+    #     for fill in self.fills:
+    #         new_object = raven_object
+    #         if new_object.attributes["fill"] != fill:
+    #             new_object.attributes["fill"] = fill
+    #             new_objects.append(raven_object)
+    #
+    #     return new_objects
+    #
+    # def expand_object(self, raven_object):
+    #     new_raven_object = raven_object
+    #
+    #     # Get current size of shape
+    #     size_value = raven_object.attributes.get("size")
+    #     # Expand shape to next size
+    #     size_value = self.sizes[self.sizes.index(size_value) + 1]
+    #     # Assign new size to shape
+    #     new_raven_object.attributes["size"] = size_value
+    #
+    #     return new_raven_object
+    #
+    # def contract_object(self, raven_object):
+    #     new_raven_object = raven_object
+    #
+    #     # Get current size of shape
+    #     size_value = raven_object.attributes.get("size")
+    #     # Contract shape to next size
+    #     size_value = self.sizes[self.sizes.index(size_value) - 1]
+    #     # Assign new size to shape
+    #     new_raven_object.attributes["size"] = size_value
+    #
+    #     return new_raven_object
+    #
+    # def rotate_object_clockwise(self, raven_object):
+    #     new_object = raven_object
+    #
+    #     # Get current angle of shape
+    #     angle_value = raven_object.attributes.get("angle")
+    #     # Decrease angle by 15 degrees
+    #     angle_value -= 15
+    #     # Assign new angle to shape
+    #     new_object.attributes["angle"] = angle_value
+    #
+    #     return new_object
+    #
+    # def rotate_object_counter_clockwise(self, raven_object):
+    #     new_object = raven_object
+    #
+    #     # Get current angle of shape
+    #     angle_value = raven_object.attributes.get("angle")
+    #     # Increase angle by 15 degrees
+    #     angle_value += 15
+    #     # Assign new angle to shape
+    #     new_object.attributes["angle"] = angle_value
+    #
+    #     return new_object

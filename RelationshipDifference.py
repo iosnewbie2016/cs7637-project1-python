@@ -1,5 +1,5 @@
 class RelationshipDifference:
 
-    def __init__(self, old_value, new_value):
-        self.old_value = old_value
-        self.new_value = new_value
+    def __init__(self, old_relationship, new_relationship):
+        self.old_relationship = old_relationship
+        self.new_relationship = new_relationship
