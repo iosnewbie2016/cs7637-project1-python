@@ -1,6 +1,4 @@
-.idea/codeStyleSettings.xml
-.idea/misc.xml
-.idea/workspace.xml
-.idea/cs7637-project1-python.iml
 *.iml
 *.xml
+*.pyc
+*.csv

@@ -9,7 +9,7 @@
 # These methods will be necessary for the project's main method to run.
 
 # Install Pillow and uncomment this line to access image processing.
-from PIL import Image
+#from PIL import Image
 from enum import Enum
 
 
@@ -92,17 +92,17 @@ class Agent:
 
         # Get differences between last two figures in first row
         row_end = size
-        row_differences = self.get_object_differences(
-            problem.figures[Figure(row_end - 1).name],
-            problem.figures[Figure(row_end).name]
-        )
+        figure1 = problem.figures[Figure(row_end - 1).name]
+        figure2 = problem.figures[Figure(row_end).name]
+        row_object_correspondences = self.get_object_correspondences(figure1, figure2)
+        row_differences = self.get_object_differences(figure1, figure2, row_object_correspondences)
 
         # Get differences between last two figures in first column
         column_end = 1 + (size * (size - 1))
-        column_differences = self.get_object_differences(
-            problem.figures[Figure(column_end - size).name],
-            problem.figures[Figure(column_end).name]
-        )
+        figure1 = problem.figures[Figure(column_end - size).name]
+        figure2 = problem.figures[Figure(column_end).name]
+        column_object_correspondences = self.get_object_correspondences(figure1, figure2)
+        column_differences = self.get_object_differences(figure1, figure2, column_object_correspondences)
 
         # The figure name as key and similarity score of differences as value
         answer_differences_similarity = {}
@@ -111,19 +111,25 @@ class Agent:
 
             last_element = size * size
             # Get differences between last two figures in last row
-            answer_row_differences = self.get_object_differences(
-                problem.figures[Figure(last_element - 1).name],
-                problem.figures[str(x)]
-            )
+            figure1 = problem.figures[Figure(last_element - 1).name]
+            figure2 = problem.figures[str(x)]
+            answer_row_object_correspondences = self.get_object_correspondences(figure1, figure2)
+            answer_row_differences = self.get_object_differences(figure1, figure2, answer_row_object_correspondences)
 
             # Get differences between last two figures in last column
-            answer_column_differences = self.get_object_differences(
-                problem.figures[Figure(last_element - size).name],
-                problem.figures[str(x)]
-            )
+            figure1 = problem.figures[Figure(last_element - size).name]
+            figure2 = problem.figures[str(x)]
+            answer_column_object_correspondences = self.get_object_correspondences(figure1, figure2)
+            answer_column_differences = self.get_object_differences(figure1, figure2, answer_column_object_correspondences)
 
-            score += self.compare_differences(row_differences, answer_row_differences)
-            score += self.compare_differences(column_differences, answer_column_differences)
+            # Compare differences between rows using the object correspondences for first two figures in row
+            score += self.compare_differences(row_differences, answer_row_differences, column_object_correspondences)
+            # Compare differences between rows using the object correspondences for the second two figures in row
+            score += self.compare_differences(row_differences, answer_row_differences, answer_column_object_correspondences)
+            # Compare differences between columns using the object correspondences for first two figures in column
+            score += self.compare_differences(column_differences, answer_column_differences, row_object_correspondences)
+            # Compare differences between columns using the object correspondences for second two figures in column
+            score += self.compare_differences(column_differences, answer_column_differences, answer_row_object_correspondences)
 
             answer_differences_similarity[str(x)] = score
 
@@ -133,6 +139,7 @@ class Agent:
         for figure_name, score in answer_differences_similarity.items():
             if score > high_score:
                 answer = int(figure_name)
+                high_score = score
 
         return answer
 
@@ -140,36 +147,62 @@ class Agent:
     # value. The dictionary represents any differences between an object in
     # two figures, with the differing attribute noted in the list of attribute
     # names (value) for the object name (key).
-    def get_object_differences(self, figure1, figure2):
-
+    def get_object_differences(self, figure1, figure2, object_correspondences):
         object_differences = {}
 
         for object1_name, raven_object1 in figure1.objects.items():
-            for object2_name, raven_object2 in figure2.objects.items():
-                if object1_name == object2_name:
-                    # Store names of differing attributes
-                    differences = []
-                    # Get list of differing attributes for the object in both figures
-                    for attribute1_name, attribute1 in raven_object1.attributes.items():
-                        for attribute2_name, attribute2 in raven_object2.attributes.items():
-                            if attribute1_name == attribute2_name and attribute1 != attribute2:
+            # Store names of differing attributes
+            differences = []
+            # Get corresponding object in second figure
+            if object1_name in object_correspondences:
+                object2_name = object_correspondences[object1_name]
+                # Get list of differing attributes for the object in both figures
+                for attribute1_name, attribute1 in raven_object1.attributes.items():
+                    for attribute2_name, attribute2 in figure2.objects[object2_name].attributes.items():
+                        if attribute1_name == attribute2_name:
+                            # Inside is different if corresponding shape is not inside corresponding parent(s)
+                            if attribute1_name == "inside":
+                                object1_parents = [x.strip() for x in attribute1.split(',')]
+                                object2_parents = [x.strip() for x in attribute2.split(',')]
+                                if len(object1_parents) != len(object2_parents):
+                                    differences.append(attribute1_name)
+                                else:
+                                    for object1_parent in object1_parents:
+                                        if object1_parent in object_correspondences:
+                                            if object_correspondences[object1_parent] not in object2_parents:
+                                                differences.append(attribute1_name)
+                            elif attribute1 != attribute2:
                                 differences.append(attribute1_name)
-                    # Insert list in the dictionary if differences exist
-                    if differences:
-                        object_differences[object1_name] = differences
+                # Object was unchanged if there are no differences
+                if not differences:
+                    differences.append("unchanged")
+            else:
+                # Object was deleted in second figure
+                differences.append("deleted")
+            # Insert list in the dictionary if differences exist
+            if differences:
+                object_differences[object1_name] = differences
+
+        # Check if any objects in second figure were added
+        for object2_name in figure2.objects:
+            differences = []
+            if object2_name not in object_correspondences.values():
+                differences.append("added")
+                object_differences[object2_name] = differences
 
         return object_differences
 
-    def compare_differences(self, set1, set2):
+    def compare_differences(self, set1, set2, object_correspondences):
         similarities = 0
 
         for object1_name, object1_differences in set1.items():
-            for object2_name, object2_differences in set2.items():
-                if object1_name == object2_name:
-                    for object1_difference in object1_differences:
-                        for object2_difference in object2_differences:
+            if object1_name in object_correspondences:
+                object2_name = object_correspondences[object1_name]
+                for object1_difference in object1_differences:
+                    if object2_name in set2:
+                        for object2_difference in set2[object2_name]:
                             if object1_difference == object2_difference:
-                                similiarities += 1
+                                similarities += 1
 
         return similarities
 
@@ -182,11 +215,11 @@ class Agent:
         if len(figure1.objects) == 1 and len(figure2.objects) == 1:
             # There is a one to one correspondence of objects
             object_correspondences[list(figure1.objects.keys())[0]] = list(figure2.objects.keys())[0]
-        elif not self.has_repeated_shapes(figure1) and not self.has_repeated_shapes(figure2):
-            for object1_name, raven_object1 in figure1.objects.items():
-                for object2_name, raven_object2 in figure2.objects.items():
-                    if raven_object1.attributes["shape"] == raven_object2.attributes["shape"]:
-                        object_correspondences[object1_name] = object2_name
+        # elif not self.has_repeated_shapes(figure1) and not self.has_repeated_shapes(figure2):
+        #     for object1_name, raven_object1 in figure1.objects.items():
+        #         for object2_name, raven_object2 in figure2.objects.items():
+        #             if raven_object1.attributes["shape"] == raven_object2.attributes["shape"]:
+        #                 object_correspondences[object1_name] = object2_name
         # Match up objects based on highest number of similarities
         else:
             # object1.name as key and dictionary of object2.name as key and similarity score as value
@@ -207,7 +240,7 @@ class Agent:
                 for object2_name in figure2.objects:
                     # Check if object1 has the highest similarity score with object2
                     most_similar = True
-                    for object_name, similarity_scores in object_similarity_scores:
+                    for object_name, similarity_scores in object_similarity_scores.items():
                         if object_name != object1_name:
                             if (similarity_scores[object2_name] >
                                     object_similarity_scores[object1_name][object2_name]):
@@ -216,40 +249,6 @@ class Agent:
                         object_correspondences[object1_name] = object2_name
 
         return object_correspondences
-
-    def has_repeated_shapes(self, raven_figure):
-        repeated_shapes = False
-
-        for object1_name, raven_object1 in raven_figure.objects.items():
-            # Check if shape of object is shared by another object in figure
-            for object2_name, raven_object2 in raven_figure.objects.items():
-                if object1_name != object2_name:
-                    if raven_object1.attributes["shape"] == raven_object2.attributes["shape"]:
-                        repeated_shapes = True
-
-        return repeated_shapes
-
-    # Iterate through row specified by the given row number and print the
-    # shape pairs in the row.
-    def traverse_row(self, index, size):
-        print("traverse_row")
-        current_cell = index * size - (size - 1)
-        row_end = current_cell + size - 1
-
-        while current_cell < row_end:
-            print(Figure(current_cell).name + " and " + Figure(current_cell + 1).name)
-            current_cell += 1
-
-    # Iterate through column specified by the given column number and print
-    # the shape pairs in the column.
-    def traverse_column(self, index, size):
-        print("traverse_column")
-        current_cell = index
-        column_end = index + (size * (size - 1))
-
-        while current_cell < column_end:
-            print(Figure(current_cell).name + " and " + Figure(current_cell + size).name)
-            current_cell += size
 
     # MEANS END ANALYSIS METHODS #
 
